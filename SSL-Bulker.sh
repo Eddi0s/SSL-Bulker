@@ -3,6 +3,9 @@
 BREED=$(wc -L host.list | awk '{print $1 + 5}')
 CertNameBreed=$(wc -L host.list | awk '{print $1 + 5}')
 
+# Noteer het starttijdstip
+start_time=$(date +%s)
+
 echo "-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
 printf "%-${BREED}s %-20s %-40s %-30s %-${CertNameBreed}s %-20s %-20s\n" "Domain" "IP" "Server" "DNS" "Cert Name" "CA's" "Exp Date"
 echo "-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
@@ -65,7 +68,7 @@ fi
 CA=$(timeout 2s bash -c "echo "Q" | openssl s_client -servername $Domain -connect $Domain:443 2>/dev/null" | grep -m 1 'O =' | cut -d, -f4 | cut -c 6- | awk '{print $1;}')
 
 if [ "$CA" = "" ]; then
-  CA="${RED}TimeOut${RESET}"
+  CA="${RED}CA not found${RESET}"
 fi
 
 printf "%-${BREED}s %-20s %-40s %-30s %-${CertNameBreed}s %-20s %-20s\n" "$Domain" "$IP" "$SERVER" "$DNS" "$CertName" "$CA" "$ExpDate"
@@ -75,3 +78,13 @@ done <host.list
 echo "-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
 
 echo "Scanned on $(date)"
+
+# Noteer het eindtijdstip
+end_time=$(date +%s)
+
+# Bereken het verschil tussen het eind- en starttijdstip
+elapsed_time=$((end_time - start_time))
+
+# Weergeef het verschil in seconden
+echo "Script took $elapsed_time seconds to finish"
+
