@@ -70,10 +70,14 @@ if [ "$CertName" = "" ]; then
   CertName="${RED}TimeOut"
 fi
 
-CA=$(timeout 2s bash -c "echo "Q" | openssl s_client -servername $Domain -connect $Domain:443 2>/dev/null" | grep -m 1 'O =' | cut -d, -f4 | cut -c 6- | awk '{print $1;}')
+CA=$(timeout 2s bash -c "echo "Q" | openssl s_client -servername $Domain -connect $Domain:443 2>/dev/null" | grep -m 1 'O =' | grep -o 'O = [^,]*' | sed 's/O = //')
 
 if [ "$CA" = "" ]; then
-  CA="${RED}CA not found"
+  CA="CA not found"
+fi
+
+if [ "$CA" = "Let's Encrypt" ]; then
+  CA="Lets Encrypt"
 fi
 
 printf "%-${BREED}s %-20s %-40s %-30s %-${CertNameBreed}s %-20s %-20s\n" "$Domain" "$IP" "$SERVER" "$DNS" "$CertName" "$CA" "$ExpDate"
