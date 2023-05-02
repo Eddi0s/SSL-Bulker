@@ -20,7 +20,7 @@ echo "--------------------------------------------------------------------------
 
 while read Domain; do
 
-IP=$(host $Domain | awk 'NR==1{print $4}')
+IP=$(host $Domain | grep -m1 -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
 if [ -z "$IP" ]; then
 IP="${RED}Not Found"
 SERVER="${RED}Not Found${RESET}"
@@ -29,16 +29,7 @@ SERVER=$(host $IP | awk 'NR==1{print $5}')
 fi
 
 # Voer het dig commando uit en sla het resultaat op in een variabele
-DNS=$(dig ns $Domain)
-
-# Controleer of de AUTHORITY SECTION of QUESTION SECTION voorkomt in het resultaat
-
-if echo "$DNS" | grep -q ";; AUTHORITY SECTION:"; then
-  DNS=$(echo "$DNS" | sed -n '/;; AUTHORITY SECTION:/,+1p' | tail -n 1 | awk '{print $5;}')
-
-elif echo "$DNS" | grep -q ";; ANSWER SECTION"; then
-  DNS=$(echo "$DNS" | sed -n '/;; ANSWER SECTION/,+1p' | tail -n 1 | awk '{print $5;}')
-fi
+DNS=$(dig ns $Domain | grep -m1 "IN\s*NS\s" | awk '{print $NF}')
 
 # Sla ExpDate output op in ExpDate variabele
 ExpDate=$(timeout 2s bash -c "echo 'Q' | openssl s_client -servername $Domain -connect $Domain:443 2>/dev/null | openssl x509 -noout -dates | grep notAfter | cut -c 10-")
