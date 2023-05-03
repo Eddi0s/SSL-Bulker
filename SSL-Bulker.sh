@@ -29,7 +29,7 @@ SERVER=$(host $IP | awk 'NR==1{print $5}')
 fi
 
 # Voer het dig commando uit en sla het resultaat op in een variabele
-DNS=$(dig ns $Domain | grep -m1 "IN\s*NS\s" | awk '{print $NF}')
+DNS=$(dig ns $Domain | grep -m1 -E "IN\s*(NS|SOA)\s" | awk '{ print $5 }')
 
 # Sla ExpDate output op in ExpDate variabele
 ExpDate=$(timeout 2s bash -c "echo 'Q' | openssl s_client -servername $Domain -connect $Domain:443 2>/dev/null | openssl x509 -noout -dates | grep notAfter | cut -c 10-")
