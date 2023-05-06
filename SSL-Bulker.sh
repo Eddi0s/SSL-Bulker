@@ -6,6 +6,7 @@
 # Calculate the required padding for the "Width" and "CertNameWidth" columns in the output table.
 Width=$(wc -L host.list | awk '{print $1 + 5}')
 CertNameWidth=$(wc -L host.list | awk '{print $1 + 5}')
+Num_Domains=$(wc -l host.list | awk '{print $1}')
 
 # Define RED color
 RED=$(tput setaf 1)
@@ -110,4 +111,4 @@ end_time=$(date +%s)
 elapsed_time=$((end_time - start_time))
 
 # Print elapsed time for runtime script
-echo "Script took $elapsed_time seconds to finish"
+echo "Scanned $Num_Domains domains in $elapsed_time seconds"
