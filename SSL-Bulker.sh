@@ -7,12 +7,21 @@
 Width=$(wc -L host.list | awk '{print $1 + 5}')
 CertNameWidth=$(wc -L host.list | awk '{print $1 + 5}')
 
+# Define RED color
+RED=$(tput setaf 1)
+# Define GREEN color
+GREEN=$(tput setaf 2)
+# Define standard color
+RESET=$(tput sgr0)
+
 # Get the current timestamp for calculating the script's runtime.
 start_time=$(date +%s)
 
 # Print the header row for the output table.
-echo "----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"printf "%-${Width}s %-20s %-40s %-30s %-${CertNameWidth}s %-20s %-20s\n" "Domain" "IP" "Server" "DNS" "Cert Name" "CA's" "Exp Date"
-echo "----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
+echo "-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
+printf "%-${Width}s %-20s %-40s %-30s %-${CertNameWidth}s %-20s %-20s\n" "Domain" "IP" "Server" "DNS" "Cert Name" "CA's" "Exp Date"
+echo "-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
+
 # Loop through each line (domain) in the host.list file.
 while read -r Domain; do
 
@@ -29,7 +38,7 @@ while read -r Domain; do
   DNS=$(dig ns $Domain | grep -m1 -E "IN\s*(NS|SOA)\s" | awk '{ print $5 }' | cut -c1-30 | sed 's/\.$//' )
 
   # If the domain's DNS name is "ns1.dns.nl.", consider it as not found.
-  if [ "$DNS" = "ns1.dns.nl." ]; then
+  if [ "$DNS" = "ns1.dns.nl" ]; then
     DNS="NOT FOUND"
   fi
 
@@ -60,14 +69,38 @@ while read -r Domain; do
    ExpDate="NOT FOUND"
   fi
 
-# Print the domain, IP address, server name, DNS name, certificate name, CA, and expiration date
-printf "%-${Width}s %-20s %-40s %-30s %-${CertNameWidth}s %-20s %-20s\n" "$Domain" "$IP" "$SERVER" "$DNS" "$CertName" "$CA" "$ExpDate"
+# Get the current date and store it in the CURRENT_DATE variable
+  CURRENT_DATE=$(date +%s)
+
+# Calculate the number of seconds to two months of expiration
+  TWO_MONTHS_IN_SECONDS=$((60*60*24*60))
+
+# This block of code checks the expiration date of certificate
+if echo "$ExpDate" | grep -q "NOT FOUND"; then
+  ExpDate="NOT FOUND"
+else
+  EXP_DATE_PARSED=$(date -d "$ExpDate" +%s)
+  if [ $((EXP_DATE_PARSED - CURRENT_DATE)) -lt $TWO_MONTHS_IN_SECONDS ]; then
+    ExpDate="${RED}$ExpDate${RESET}"
+  else
+    ExpDate="${GREEN}$ExpDate${RESET}"
+  fi
+fi
+
+# This code block contains an if-else statement to check whether the IP variable is "NOT FOUND".
+# If it is, it will print the variable in red color using the printf command, else it will print in the normal format.
+
+if [ "$IP" = "NOT FOUND" ]; then
+  printf "\033[31m%-${Width}s\033[0m \033[31m%-20s\033[0m \033[31m%-40s\033[0m \033[31m%-30s\033[0m \033[31m%-${CertNameWidth}s\033[0m \033[31m%-20s\033[0m \033[31m%-20s\033[0m\n" "$Domain" "$IP" "$SERVER" "$DNS" "$CertName" "$CA" "$ExpDate"
+else
+  printf "%-${Width}s %-20s %-40s %-30s %-${CertNameWidth}s %-20s %-20s\n" "$Domain" "$IP" "$SERVER" "$DNS" "$CertName" "$CA" "$ExpDate"
+fi
 
 # Loop through each domain in the "host.list" file
 done <host.list
 
 # Print a separator line
-echo "-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
+echo "-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
 
 # Print the current date and time
 echo "Scanned on $(date)"
