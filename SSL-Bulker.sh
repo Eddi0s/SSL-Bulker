@@ -45,21 +45,18 @@ while read -r Domain; do
     DNS="NOT FOUND"
   fi
 
-  # Query the domain's SSL certificate name and extract it from the response.
-  CertName=$(echo | openssl s_client -servername $Domain -showcerts -connect $Domain:443 2>/dev/null)
-  if echo "$CertName" | grep -q "BEGIN CERTIFICATE"; then
-    CertName=$(echo "$CertName" | openssl x509 -noout -subject | awk '{print $NF}')
-  else
-    CertName="NOT FOUND"
-  fi
+# Query the domain's SSL certificate name and extract it from the response with a timeout of 2 seconds.
+CertName=$(timeout 2s bash -c "{ echo | openssl s_client -servername $Domain -showcerts -connect $Domain:443 2>/dev/null; }" || echo "TIMED OUT")
+if echo "$CertName" | grep -q "BEGIN CERTIFICATE"; then
+  CertName=$(echo "$CertName" | openssl x509 -noout -subject | awk '{print $NF}')
+fi
 
-  # Query the domain's SSL certificate's CA name and extract it from the response.
-  CA=$(echo | openssl s_client -servername "$Domain" -showcerts -connect "$Domain":443 2>/dev/null)
-  if echo "$CA" | grep -q "BEGIN CERTIFICATE"; then
-    CA=$(echo "$CA" | openssl x509 -noout -issuer | awk -F= '/CN =/{print $NF}' | awk '{print $1}')
-  else
-    CA="NOT FOUND"
-  fi
+# Query the domain's SSL certificate's CA name and extract it from the response with a timeout of 2 seconds.
+CA=$(timeout 2s bash -c "{ echo | openssl s_client -servername \"$Domain\" -showcerts -connect \"$Domain\":443 2>/dev/null; }" || echo "TIMED OUT")
+if echo "$CA" | grep -q "BEGIN CERTIFICATE"; then
+  CA=$(echo "$CA" | openssl x509 -noout -issuer | awk -F= '/CN =/{print $NF}' | awk '{print $1}')
+fi
+
 
   # Query the domain's SSL expiration date and extract it from the response.
   ExpDate=$(timeout 2s bash -c "echo 'Q' | openssl s_client -servername $Domain -connect $Domain:443 2>/dev/null | openssl x509 -noout -dates 2>/dev/null")
@@ -69,7 +66,7 @@ while read -r Domain; do
    ExpDate=$(echo "$ExpDate" | grep notAfter | cut -c 10-)
   else
   # If the output does not contain "notAfter", set the expiration date to "NOT FOUND"
-   ExpDate="NOT FOUND"
+   ExpDate="TIMED OUT"
   fi
 
 # Get the current date and store it in the CURRENT_DATE variable
@@ -79,8 +76,8 @@ CURRENT_DATE=$(date +%s)
 TWO_MONTHS_IN_SECONDS=$((60*60*24*60))
 
 # This block of code checks the expiration date of the certificate
-if echo "$ExpDate" | grep -q "NOT FOUND"; then
-  ExpDate="NOT FOUND"
+if echo "$ExpDate" | grep -q "TIMED OUT"; then
+  ExpDate="TIMED OUT"
 else
   EXP_DATE_PARSED=$(date -d "$ExpDate" +%s)
   SECONDS_UNTIL_EXPIRATION=$((EXP_DATE_PARSED - CURRENT_DATE))
@@ -97,10 +94,10 @@ fi
 # This code block contains an if-else statement to check whether the IP variable is "NOT FOUND".
 # If it is, it will print the variable in red color using the printf command, else it will print in the normal format.
 
-if [ "$IP" = "NOT FOUND" ]; then
-  printf "\033[31m%-${Width}s\033[0m \033[31m%-20s\033[0m \033[31m%-40s\033[0m \033[31m%-30s\033[0m \033[31m%-${CertNameWidth}s\033[0m \033[31m%-20s\033[0m \033[31m%-20s\033[0m\n" "$Domain" "$IP" "$SERVER" "$DNS" "$CertName" "$CA" "$ExpDate"
+if [ "$IP" = "TIMED OUT" ] || [ "$CA" = "TIMED OUT" ] || [ "$ExpDate" = "TIMED OUT" ]; then
+        printf "\033[31m%-${Width}s\033[0m \033[31m%-20s\033[0m \033[31m%-40s\033[0m \033[31m%-30s\033[0m \033[31m%-${CertNameWidth}s\033[0m \033[31m%-20s\033[0m \033[31m%-20s\033[0m\n" "$Domain" "$IP" "$SERVER" "$DNS" "$CertName" "$CA" "$ExpDate"
 else
-  printf "%-${Width}s %-20s %-40s %-30s %-${CertNameWidth}s %-20s %-20s\n" "$Domain" "$IP" "$SERVER" "$DNS" "$CertName" "$CA" "$ExpDate"
+        printf "%-${Width}s %-20s %-40s %-30s %-${CertNameWidth}s %-20s %-20s\n" "$Domain" "$IP" "$SERVER" "$DNS" "$CertName" "$CA" "$ExpDate"
 fi
 
 # Loop through each domain in the "host.list" file
