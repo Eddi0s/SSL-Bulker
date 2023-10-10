@@ -40,10 +40,10 @@ while read -r Domain; do
   # Query the domain's DNS name.
   DNS=$(dig ns $Domain | grep -m1 -E "IN\s*(NS|SOA)\s" | awk '{ print $5 }' | cut -c1-30 | sed 's/\.$//' )
 
-  # If the domain's DNS name is "ns1.dns.nl.", consider it as not found.
-  if [ "$DNS" = "ns1.dns.nl" ]; then
-    DNS="NOT FOUND"
-  fi
+# Controleer of de waarde van de variabele DNS leeg is of gelijk is aan "ns1.dns.nl."
+if [ -z "$DNS" ] || [ "$DNS" = "ns1.dns.nl." ]; then
+  DNS="NOT FOUND"
+fi
 
 # Query the domain's SSL certificate name and extract it from the response with a timeout of 2 seconds.
 CertName=$(timeout 2s bash -c "{ echo | openssl s_client -servername $Domain -showcerts -connect $Domain:443 2>/dev/null; }" || echo "TIMED OUT")
