@@ -3,6 +3,9 @@
 # This script reads a list of domain names from the file "host.list" and performs various checks and queries for each domain.
 # The output of each query is formatted into a table for easy readability.
 
+# Controleer en verwijder lege regels uit host.list
+sed -i '/^ *$/d' host.list
+
 # Calculate the required padding for the "Width" and "CertNameWidth" columns in the output table.
 Width=$(wc -L host.list | awk '{print $1 + 5}')
 CertNameWidth=$(wc -L host.list | awk '{print $1 + 5}')
