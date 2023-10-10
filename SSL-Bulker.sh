@@ -28,22 +28,24 @@ echo "--------------------------------------------------------------------------
 # Loop through each line (domain) in the host.list file.
 while read -r Domain; do
 
- # Query the domain's IP address and server name.
- IP=$(host $Domain | grep -m1 -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
- if [ -z "$IP" ]; then
+# Query the domain's IP address and server name with a timeout of 2 seconds.
+IP=$(timeout 2s host $Domain | grep -m1 -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+
+if [ -z "$IP" ]; then
   IP="NOT FOUND"
   SERVER="NOT FOUND"
- else
- SERVER=$(host $IP | awk 'NR==1{print $5}' | cut -c1-35 | sed 's/\.$//')
- fi
+else
+  SERVER=$(timeout 2s host $IP | awk 'NR==1{print $5}' | cut -c1-35 | sed 's/\.$//')
+fi
 
-  # Query the domain's DNS name.
-  DNS=$(dig ns $Domain | grep -m1 -E "IN\s*(NS|SOA)\s" | awk '{ print $5 }' | cut -c1-30 | sed 's/\.$//' )
+# Query the domain's DNS name with a timeout of 2 seconds.
+DNS=$(timeout 2s dig ns $Domain | grep -m1 -E "IN\\s*(NS|SOA)\\s" | awk '{ print $5 }' | cut -c1-30 | sed 's/\\.$//')
 
-# Controleer of de waarde van de variabele DNS leeg is of gelijk is aan "ns1.dns.nl."
+# Check if the value of the DNS variable is empty or equal to "ns1.dns.nl."
 if [ -z "$DNS" ] || [ "$DNS" = "ns1.dns.nl." ]; then
   DNS="NOT FOUND"
 fi
+
 
 # Query the domain's SSL certificate name and extract it from the response with a timeout of 2 seconds.
 CertName=$(timeout 2s bash -c "{ echo | openssl s_client -servername $Domain -showcerts -connect $Domain:443 2>/dev/null; }" || echo "TIMED OUT")
