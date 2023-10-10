@@ -50,29 +50,38 @@ if [ -z "$DNS" ] || [ "$DNS" = "ns1.dns.nl." ]; then
 fi
 
 
-# Query the domain's SSL certificate name and extract it from the response with a timeout of 2 seconds.
+# This code retrieves SSL certificate information from a domain, including certificate name, CA name, and expiration date.
+# If any of the steps encounter a timeout, the associated variables are set to "TIMED OUT."
+
+# Query the SSL certificate's domain name and retrieve it with a 2-second timeout.
 CertName=$(timeout 2s bash -c "{ echo | openssl s_client -servername $Domain -showcerts -connect $Domain:443 2>/dev/null; }" || echo "TIMED OUT")
-if echo "$CertName" | grep -q "BEGIN CERTIFICATE"; then
-  CertName=$(echo "$CertName" | openssl x509 -noout -subject | awk '{print $NF}')
-fi
 
-# Query the domain's SSL certificate's CA name and extract it from the response with a timeout of 2 seconds.
-CA=$(timeout 2s bash -c "{ echo | openssl s_client -servername \"$Domain\" -showcerts -connect \"$Domain\":443 2>/dev/null; }" || echo "TIMED OUT")
-if echo "$CA" | grep -q "BEGIN CERTIFICATE"; then
-  CA=$(echo "$CA" | openssl x509 -noout -issuer | awk -F= '/CN =/{print $NF}' | awk '{print $1}')
-fi
+if [ "$CertName" = "TIMED OUT" ]; then
+  CA="TIMED OUT"
+  ExpDate="TIMED OUT"
+else
+  # If the certificate starts with "BEGIN CERTIFICATE," retrieve the certificate name.
+  if echo "$CertName" | grep -q "BEGIN CERTIFICATE"; then
+    CertName=$(echo "$CertName" | openssl x509 -noout -subject | awk '{print $NF}')
+  fi
 
+  # Query the SSL certificate's CA name and retrieve it with a 2-second timeout.
+  CA=$(timeout 2s bash -c "{ echo | openssl s_client -servername \"$Domain\" -showcerts -connect \"$Domain\":443 2>/dev/null; }" || echo "TIMED OUT")
+  if echo "$CA" | grep -q "BEGIN CERTIFICATE"; then
+    CA=$(echo "$CA" | openssl x509 -noout -issuer | awk -F= '/CN =/{print $NF}' | awk '{print $1}')
+  fi
 
-  # Query the domain's SSL expiration date and extract it from the response.
+  # Query the SSL certificate's expiration date and retrieve it from the response.
   ExpDate=$(timeout 2s bash -c "echo 'Q' | openssl s_client -servername $Domain -connect $Domain:443 2>/dev/null | openssl x509 -noout -dates 2>/dev/null")
 
-  # If the output of openssl s_client contains the string "notAfter", extract the expiration date and assign it to the ExpDate variable
+  # If the output of openssl s_client contains "notAfter," extract the expiration date.
   if echo "$ExpDate" | grep -q "notAfter"; then
-   ExpDate=$(echo "$ExpDate" | grep notAfter | cut -c 10-)
+    ExpDate=$(echo "$ExpDate" | grep notAfter | cut -c 10-)
   else
-  # If the output does not contain "notAfter", set the expiration date to "NOT FOUND"
-   ExpDate="TIMED OUT"
+    # If "notAfter" is not found in the output, set the expiration date to "TIMED OUT."
+    ExpDate="TIMED OUT"
   fi
+fi
 
 # Get the current date and store it in the CURRENT_DATE variable
 CURRENT_DATE=$(date +%s)
