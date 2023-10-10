@@ -32,13 +32,13 @@ echo "--------------------------------------------------------------------------
 while read -r Domain; do
 
 # Query the domain's IP address and server name with a timeout of 2 seconds.
-IP=$(timeout 2s host $Domain | grep -m1 -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+IP=$(timeout 1s host $Domain | grep -m1 -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
 
 if [ -z "$IP" ]; then
   IP="NOT FOUND"
   SERVER="NOT FOUND"
 else
-  SERVER=$(timeout 2s host $IP | awk 'NR==1{print $5}' | cut -c1-35 | sed 's/\.$//')
+  SERVER=$(timeout 1s host $IP | awk 'NR==1{print $5}' | cut -c1-35 | sed 's/\.$//')
 fi
 
 # Query the domain's DNS name with a timeout of 2 seconds.
@@ -54,7 +54,7 @@ fi
 # If any of the steps encounter a timeout, the associated variables are set to "TIMED OUT."
 
 # Query the SSL certificate's domain name and retrieve it with a 2-second timeout.
-CertName=$(timeout 2s bash -c "{ echo | openssl s_client -servername $Domain -showcerts -connect $Domain:443 2>/dev/null; }" || echo "TIMED OUT")
+CertName=$(timeout 1s bash -c "{ echo | openssl s_client -servername $Domain -showcerts -connect $Domain:443 2>/dev/null; }" || echo "TIMED OUT")
 
 if [ "$CertName" = "TIMED OUT" ]; then
   CA="TIMED OUT"
