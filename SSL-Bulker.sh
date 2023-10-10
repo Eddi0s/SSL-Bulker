@@ -12,6 +12,8 @@ Num_Domains=$(wc -l host.list | awk '{print $1}')
 RED=$(tput setaf 1)
 # Define GREEN color
 GREEN=$(tput setaf 2)
+# Define ORANGE color
+ORANGE=$(tput setaf 202)
 # Define standard color
 RESET=$(tput sgr0)
 
@@ -71,20 +73,24 @@ while read -r Domain; do
   fi
 
 # Get the current date and store it in the CURRENT_DATE variable
-  CURRENT_DATE=$(date +%s)
+CURRENT_DATE=$(date +%s)
 
 # Calculate the number of seconds to two months of expiration
-  TWO_MONTHS_IN_SECONDS=$((60*60*24*60))
+TWO_MONTHS_IN_SECONDS=$((60*60*24*60))
 
-# This block of code checks the expiration date of certificate
+# This block of code checks the expiration date of the certificate
 if echo "$ExpDate" | grep -q "NOT FOUND"; then
   ExpDate="NOT FOUND"
 else
   EXP_DATE_PARSED=$(date -d "$ExpDate" +%s)
-  if [ $((EXP_DATE_PARSED - CURRENT_DATE)) -lt $TWO_MONTHS_IN_SECONDS ]; then
-    ExpDate="${RED}$ExpDate${RESET}"
+  SECONDS_UNTIL_EXPIRATION=$((EXP_DATE_PARSED - CURRENT_DATE))
+
+  if [ $SECONDS_UNTIL_EXPIRATION -lt 0 ]; then
+    ExpDate="${RED}$ExpDate${RESET}"  # Certificate has already expired, make it red
+  elif [ $SECONDS_UNTIL_EXPIRATION -lt $TWO_MONTHS_IN_SECONDS ]; then
+    ExpDate="${ORANGE}$ExpDate${RESET}"  # Certificate will expire within two months, make it orange
   else
-    ExpDate="${GREEN}$ExpDate${RESET}"
+    ExpDate="${GREEN}$ExpDate${RESET}"  # Certificate is valid for more than two months, make it green
   fi
 fi
 
