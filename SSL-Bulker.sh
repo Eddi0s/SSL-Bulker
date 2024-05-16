@@ -31,88 +31,89 @@ echo "--------------------------------------------------------------------------
 # Loop through each line (domain) in the host.list file.
 while read -r Domain; do
 
-# Query the domain's IP address and server name with a timeout of 2 seconds.
-IP=$(timeout 1s host $Domain | grep -m1 -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+    # Query the domain's IP address and server name with a timeout of 2 seconds.
+    IP=$(timeout 2s host $Domain | grep -m1 -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
 
-if [ -z "$IP" ]; then
-  IP="NOT FOUND"
-  SERVER="NOT FOUND"
-else
-  SERVER=$(timeout 1s host $IP | awk 'NR==1{print $5}' | cut -c1-35 | sed 's/\.$//')
-fi
+    if [ -z "$IP" ]; then
+        IP="NOT FOUND"
+        SERVER="NOT FOUND"
+    else
+        SERVER=$(timeout 2s host $IP | awk 'NR==1{print $5}' | cut -c1-35 | sed 's/\.$//')
+    fi
 
-# Query the domain's DNS name with a timeout of 2 seconds.
-DNS=$(timeout 2s dig ns $Domain | grep -m1 -E "IN\\s*(NS|SOA)\\s" | awk '{ print $5 }' | cut -c1-30 | sed 's/\\.$//')
+    # Query the domain's DNS name with a timeout of 2 seconds.
+    DNS=$(timeout 2s dig ns $Domain | grep -m1 -E "IN\\s*(NS|SOA)\\s" | awk '{ print $5 }' | cut -c1-30 | sed 's/\\.$//')
 
-# Check if the value of the DNS variable is empty or equal to "ns1.dns.nl."
-if [ -z "$DNS" ] || [ "$DNS" = "ns1.dns.nl." ]; then
-  DNS="NOT FOUND"
-fi
+    # Check if the value of the DNS variable is empty or equal to "ns1.dns.nl."
+    if [ -z "$DNS" ] || [ "$DNS" = "ns1.dns.nl." ]; then
+        DNS="NOT FOUND"
+    fi
 
+    # Query the SSL certificate's domain name and retrieve it with a 2-second timeout.
+    CertName=$(timeout 2s bash -c "{ echo | openssl s_client -servername $Domain -showcerts -connect $Domain:443 2>/dev/null; }" || echo "TIMED OUT")
 
-# This code retrieves SSL certificate information from a domain, including certificate name, CA name, and expiration date.
-# If any of the steps encounter a timeout, the associated variables are set to "TIMED OUT."
+    if [ "$CertName" = "TIMED OUT" ] || echo "$CertName" | grep -q "no peer certificate available"; then
+        CertName="NOT FOUND"
+        CA="NOT FOUND"
+        ExpDate="NOT FOUND"
+    else
+        # If the certificate starts with "BEGIN CERTIFICATE," retrieve the certificate name.
+        if echo "$CertName" | grep -q "BEGIN CERTIFICATE"; then
+            CertName=$(echo "$CertName" | openssl x509 -noout -subject | awk '{print $NF}')
+        fi
 
-# Query the SSL certificate's domain name and retrieve it with a 2-second timeout.
-CertName=$(timeout 1s bash -c "{ echo | openssl s_client -servername $Domain -showcerts -connect $Domain:443 2>/dev/null; }" || echo "TIMED OUT")
+        # Query the SSL certificate's CA name and retrieve it with a 2-second timeout.
+        CA=$(timeout 2s bash -c "{ echo | openssl s_client -servername \"$Domain\" -showcerts -connect \"$Domain\":443 2>/dev/null; }" || echo "TIMED OUT")
+        if echo "$CA" | grep -q "no peer certificate available"; then
+            CA="NOT FOUND"
+        else
+            if echo "$CA" | grep -q "BEGIN CERTIFICATE"; then
+                CA=$(echo "$CA" | openssl x509 -noout -issuer | awk -F= '/CN =/{print $NF}' | awk '{print $1}')
+            fi
+        fi
 
-if [ "$CertName" = "TIMED OUT" ]; then
-  CA="TIMED OUT"
-  ExpDate="TIMED OUT"
-else
-  # If the certificate starts with "BEGIN CERTIFICATE," retrieve the certificate name.
-  if echo "$CertName" | grep -q "BEGIN CERTIFICATE"; then
-    CertName=$(echo "$CertName" | openssl x509 -noout -subject | awk '{print $NF}')
-  fi
+        # Query the SSL certificate's expiration date and retrieve it from the response.
+        ExpDate=$(timeout 2s bash -c "echo 'Q' | openssl s_client -servername $Domain -connect $Domain:443 2>/dev/null | openssl x509 -noout -dates 2>/dev/null")
 
-  # Query the SSL certificate's CA name and retrieve it with a 2-second timeout.
-  CA=$(timeout 2s bash -c "{ echo | openssl s_client -servername \"$Domain\" -showcerts -connect \"$Domain\":443 2>/dev/null; }" || echo "TIMED OUT")
-  if echo "$CA" | grep -q "BEGIN CERTIFICATE"; then
-    CA=$(echo "$CA" | openssl x509 -noout -issuer | awk -F= '/CN =/{print $NF}' | awk '{print $1}')
-  fi
+        # If the output of openssl s_client contains "notAfter," extract the expiration date.
+        if echo "$ExpDate" | grep -q "notAfter"; then
+            ExpDate=$(echo "$ExpDate" | grep notAfter | cut -c 10-)
+        else
+            # If "notAfter" is not found in the output, set the expiration date to "NOT FOUND."
+            ExpDate="NOT FOUND"
+        fi
+    fi
 
-  # Query the SSL certificate's expiration date and retrieve it from the response.
-  ExpDate=$(timeout 2s bash -c "echo 'Q' | openssl s_client -servername $Domain -connect $Domain:443 2>/dev/null | openssl x509 -noout -dates 2>/dev/null")
+    # Get the current date and store it in the CURRENT_DATE variable
+    CURRENT_DATE=$(date +%s)
 
-  # If the output of openssl s_client contains "notAfter," extract the expiration date.
-  if echo "$ExpDate" | grep -q "notAfter"; then
-    ExpDate=$(echo "$ExpDate" | grep notAfter | cut -c 10-)
-  else
-    # If "notAfter" is not found in the output, set the expiration date to "TIMED OUT."
-    ExpDate="TIMED OUT"
-  fi
-fi
+    # Calculate the number of seconds to two months of expiration
+    TWO_MONTHS_IN_SECONDS=$((60*60*24*60))
 
-# Get the current date and store it in the CURRENT_DATE variable
-CURRENT_DATE=$(date +%s)
+    # This block of code checks the expiration date of the certificate
+    if echo "$ExpDate" | grep -q "NOT FOUND"; then
+        ExpDate="NOT FOUND"
+    else
+        EXP_DATE_PARSED=$(date -d "$ExpDate" +%s)
+        SECONDS_UNTIL_EXPIRATION=$((EXP_DATE_PARSED - CURRENT_DATE))
 
-# Calculate the number of seconds to two months of expiration
-TWO_MONTHS_IN_SECONDS=$((60*60*24*60))
+        if [ $SECONDS_UNTIL_EXPIRATION -lt 0 ]; then
+            ExpDate="${RED}$ExpDate${RESET}"  # Certificate has already expired, make it red
+        elif [ $SECONDS_UNTIL_EXPIRATION -lt $TWO_MONTHS_IN_SECONDS ]; then
+            ExpDate="${ORANGE}$ExpDate${RESET}"  # Certificate will expire within two months, make it orange
+        else
+            ExpDate="${GREEN}$ExpDate${RESET}"  # Certificate is valid for more than two months, make it green
+        fi
+    fi
 
-# This block of code checks the expiration date of the certificate
-if echo "$ExpDate" | grep -q "TIMED OUT"; then
-  ExpDate="TIMED OUT"
-else
-  EXP_DATE_PARSED=$(date -d "$ExpDate" +%s)
-  SECONDS_UNTIL_EXPIRATION=$((EXP_DATE_PARSED - CURRENT_DATE))
+    # This code block contains an if-else statement to check whether the IP variable is "NOT FOUND".
+    # If it is, it will print the variable in red color using the printf command, else it will print in the normal format.
 
-  if [ $SECONDS_UNTIL_EXPIRATION -lt 0 ]; then
-    ExpDate="${RED}$ExpDate${RESET}"  # Certificate has already expired, make it red
-  elif [ $SECONDS_UNTIL_EXPIRATION -lt $TWO_MONTHS_IN_SECONDS ]; then
-    ExpDate="${ORANGE}$ExpDate${RESET}"  # Certificate will expire within two months, make it orange
-  else
-    ExpDate="${GREEN}$ExpDate${RESET}"  # Certificate is valid for more than two months, make it green
-  fi
-fi
-
-# This code block contains an if-else statement to check whether the IP variable is "NOT FOUND".
-# If it is, it will print the variable in red color using the printf command, else it will print in the normal format.
-
-if [ "$IP" = "TIMED OUT" ] || [ "$CA" = "TIMED OUT" ] || [ "$ExpDate" = "TIMED OUT" ]; then
+    if [ "$IP" = "NOT FOUND" ] || [ "$CA" = "NOT FOUND" ] || [ "$ExpDate" = "NOT FOUND" ]; then
         printf "\033[31m%-${Width}s\033[0m \033[31m%-20s\033[0m \033[31m%-40s\033[0m \033[31m%-30s\033[0m \033[31m%-${CertNameWidth}s\033[0m \033[31m%-20s\033[0m \033[31m%-20s\033[0m\n" "$Domain" "$IP" "$SERVER" "$DNS" "$CertName" "$CA" "$ExpDate"
-else
+    else
         printf "%-${Width}s %-20s %-40s %-30s %-${CertNameWidth}s %-20s %-20s\n" "$Domain" "$IP" "$SERVER" "$DNS" "$CertName" "$CA" "$ExpDate"
-fi
+    fi
 
 # Loop through each domain in the "host.list" file
 done <host.list
