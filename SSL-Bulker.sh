@@ -68,7 +68,7 @@ while read -r Domain; do
             CA="NOT FOUND"
         else
             if echo "$CA" | grep -q "BEGIN CERTIFICATE"; then
-                CA=$(echo "$CA" | openssl x509 -noout -issuer | awk -F= '/CN =/{print $NF}' | awk '{print $1}')
+                    CA=$(echo "$CA" | openssl x509 -noout -issuer | sed -n 's/^.*O *= *\([^,]*\).*/\1/p')
             fi
         fi
 
